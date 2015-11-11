@@ -1,0 +1,470 @@
+\documentclass{article}
+
+<<OPTIONS_LIBRARIES,cache=FALSE,echo=FALSE,results='hide',message=FALSE,warning=FALSE>>=
+opts_chunk$set(concordance=TRUE, 
+               echo=FALSE,
+               tidy=FALSE,
+               autodep=TRUE,
+               cache=TRUE, 
+               message=FALSE, 
+               warning=FALSE,
+               size='scriptsize',
+               results='hide',
+               comment=NA, 
+               fig.align='center',
+               fig.width=6,
+               fig.height=6, 
+               out.width='.6\\textwidth',
+               fig.show='hold')
+
+library(foreign)
+library(xtable)
+library(copula)
+library(plyr)
+
+@
+
+\usepackage[top=0.8in,bottom=0.8in,left=1in,right=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+
+\begin{document}
+
+\begin{huge}
+\begin{center}
+\textbf{A copula based measure of \\ 
+poverty and well-being
+} \\
+
+(Very preliminary draft) \\
+
+\end{center}
+\end{huge}
+
+
+\begin{abstract}
+This paper develops a multidimensional measure of poverty and well-being based on copula functions. The main focus of this research, however, is concentrated on dependence among components of the multidimensional measure. This focus has the following justifications. If the dependence among the components is rather high then the deprivation in one or two (or a few components) can lead to substantial spillover effects which in turn can lead to significant erosions of the overall conditions of well-being. Therefore, the dependence among the components should not be neglected. Demonstrations of the framework are based on a data from rural households in Ethiopia.       
+\end{abstract}
+
+\newpage
+\pagenumbering{roman}
+\tableofcontents
+
+\newpage
+\pagenumbering{arabic}
+\section{Introduction}
+
+In recent years, we have experienced a rapid surge of interest in multidimensional measures of poverty and well-being. This surge of interest was partially fueled by appealing arguments and results obtained by Alkire and Santos (2010a, 2010b) and Alkire and Foster (2007). In this paper, we also investigate a measure of multidimensional poverty and well-being, but our focus will be concentrated on dependence among the major components of this measure. \\
+
+In order to provide the \textit{raison d'etre} for this focus, let's consider a trivial example. Suppose we have an agricultural household which has just lost its major agricultural equipment/asset due to an unanticipated external shock. If this agricultural asset was indeed quite crucial for the farm then its loss would have substantial negative impacts on the household's productivity, income, and consumption. In addition, if this household lacks basic safety-nets (e.g. savings, insurance, government assistance) to reacquire this assets then the loss can lead to prolonged negative impacts. In this case, we observe not only a correlation, but also a significant dependence between the components representing the well-being of the household. Therefore, the main goal of this research is to demonstrate statistical methods to analyze this dependence. \\
+
+There are numerous ways to model the dependence under the multivariate settings (see for example Joe 1997, and references therein). In this paper, however, we restrict our analysis to copula-based measures of dependence \footnote{Comprehensive outline and review of the statistical framework can be found in Nelsen (2006), and more recently in Joe, (2014)}. This approach has several motivations. For instance, empirical analysis of multidimensional  poverty and well-being are often based on a set of variables which have different underlying distributions. This set is often represented by a combination of variables which are continuous (e.g. consumption), binary (e.g. access to electricity), ordered (e.g. level of education), or count (e.g. number of assets owned). In this case, common multivariate distributions (e.g. multivariate normal) can't handle properly these types of multidimensional data. On the contrary, copula-based methods provide convenient tools to combine different distributions into a unified framework of analysis. Another motivation stems from the fact that the copula-based methods provide an intuitive way to check the statistical importance and significance of components representing the multidimensional measure of poverty and well-being. \\
+
+The remainder of this paper is organized as follows. Next section provides description of our data. Section 3 outlines our model. Penultimate section shows our estimation results based on a data from rural households in Ethiopia. Section 5 concludes.   
+
+\section{Data}
+
+<<ImportData,results='asis'>>=
+mydata<-read.dta("C:/Data/Ethiopia/DataFilesLast/data_for_copula.dta")
+attach(mydata)
+
+ww<-cbind(realcons_w1,pcl_w1,AveYrsEducAdults_w1,water_w1,
+          electric_w1,toilet_w1,abs(AnyHHMemLackMA_w1-1),
+          realcons_w2,pcl_w2,AveYrsEducAdults_w2,water_w2,
+          electric_w2,toilet_w2,abs(AnyHHMemLackMA_w2-1))
+
+ww<-ww[complete.cases(ww),]
+
+# Data Names assigned
+DataNames<-c("Real Consumption","Livestock","Ave.Yrs.Educ.Adults","Access to safe water",
+             "Access to electricity","Access to sanitary facilities","Access to medical services")
+
+# Cut of for continuous
+cut.contin<-c(0.302,0.302,5)
+
+# Dimensions
+n<-dim(ww)[1]
+m<-dim(ww)[2]/2
+
+# Divide the data into two waves
+w1<-ww[,1:m]
+w2<-ww[,(m+1):(2*m)]
+
+# Data type if continuous (0 No, 1 Yes) Benchmark - 10 
+DataTypes<-matrix(0,m,1)
+for (j in 1:m) {
+  if (length(unique(w1[,j]))>8) {
+    DataTypes[j,1]<-1
+  }
+}
+
+# Empirical distributions
+wave1<-matrix(0,n,m)
+wave2<-matrix(0,n,m)
+for (j in 1:m) {
+  wave1[,j]<-rank(w1[,j],ties.method="average")/(n+1)
+  wave2[,j]<-rank(w2[,j],ties.method="average")/(n+1)
+}
+
+@
+
+The data used in our analysis covers rural households from Ethiopia. The data was collected in two waves: wave one (2011-2012) and wave two (2013-2014). In this paper, we concentrate our focus on a subset of this data which tend to have noticeable impacts on poverty and well-being. This subset includes variables such as consumption, asset ownership, education, and access to basic necessities, including access to water, electricity, medical services, and sanitary facilities. Summary statistics of these variables are shown in Table \ref{tbl:dstat}: \\
+
+<<DescStat,results='asis'>>=
+
+dstat<-matrix(0,m,5)
+for (j in 1:m) {
+  dstat[j,1]<-DataTypes[j,1]
+  if (DataTypes[j,1]==1) {
+    dstat[j,2]<-summary(w1[,j])[4]
+    dstat[j,3]<-summary(w2[,j])[4]
+    dstat[j,4]<-dstat[j,3]-dstat[j,2]
+    dstat[j,5]<-100*(dstat[j,3]/dstat[j,2]-1)
+  } else {
+    dstat[j,2]<-100*(count(w1[,j])$freq[1]/n)
+    dstat[j,3]<-100*(count(w2[,j])$freq[1]/n)
+    dstat[j,4]<-dstat[j,3]-dstat[j,2]
+    dstat[j,5]<-100*(dstat[j,3]/dstat[j,2]-1)    
+  }
+}
+
+colnames(dstat)<-c("Data Type","Wave 1","Wave 2","Change","Percent")
+rownames(dstat)<-DataNames
+
+dstat.xtbl<-xtable(dstat,digits=1,
+                caption="Summary statistics (if Data Type =1 then Continuous Variable)",
+                label="tbl:dstat")
+print(dstat.xtbl,caption.placement="top",
+      sanitize.text.function=function(x){x})
+
+@
+
+Table \ref{tbl:dstat} indicates that all components, except real consumption, evidenced noticeable improvements from wave one to wave two. For instance, total value of livestock owned by a member of household increased on average by 453 Birrs or by roughly 12 percent, while number of households which didn't have access to electricity decreased from 67 percent to 52 percent. In other words, given these noticeable improvements we would expect that the well-being of Ethiopian households was higher in the wave two.         
+
+\section{Copula Model}
+
+This section outlines our copula-based framework of analysis. Sklar (1959) is 'held responsible' for coining the term copula.\footnote{Even though, Sklar is credited for introducing the term copula, the original idea can be traced to Hoeffding (1940,1941).} He argues that for an n-dimensional cumulative distribution $F$ with one-dimensional margins $F_1,F_2,\dots,F_n$, there exists a copula function $C$ which establishes a convenient link between these margins and the original multivariate distribution function $F$. This link can be expressed as follows:
+
+\begin{equation}
+F(x_1,\dots,x_n)=C(F_1(x_1),\dots,F_n(x_n))
+\label{eq:cdf_copula_link}
+\end{equation}
+
+In other words, copula functions themselves can be interpreted as n-dimensional cumulative distribution functions where the individual margins are from the uniform distribution $U(0,1)$. This definition will be quite useful in our analysis, especially when we are comparing measures of well-being for different periods. \\
+
+It was mentioned earlier that copula functions provide a convenient way to combine different distributions into a unified model, but this is not the only advantage of copula functions. Copula functions also provide a possibility to model the dependence structure independently of the marginal distributions. In addition, increasing and continuous transformations of the marginal distributions do not have any impact on the dependence structure obtained by the copula. This convenient feature of the copula is referred as the \textbf{invariance property} (Schweizer and Sklar, 1983). \\
+
+In our analysis, we have decided to choose the Clayton copula function (Mardia 1962; Takahashi 1965; Kimeldorf and Sampson 1975; Clayton 1978; Cook and Johnson 1981). This choice, however, is not adhoc, because we are trying to make use of the unique tail behavior attributable to the Clayton copula. The Clayton copula works relatively well, if there is a strong dependence in the left tail of the distribution. This feature is highly relevant for our analysis, because our data has large number of households which are deprived in several components representing the multidimensional measure of well-being.\\
+
+The Clayton copula is formulated as follows:
+
+\begin{equation}
+C(\mathbf{u},\theta)=\left[u_1^{-\theta}+u_2^{-\theta}+...+u_D^{-\theta} -(D-1)\right]^{-1/\theta}=S^{-1/\theta}
+\label{eq:clayton_cdf}
+\end{equation}
+
+\noindent where $u_i$'s (or the $F_i(x_i)$'s in (\ref{eq:cdf_copula_link})) are the individual components of the multidimensional measure of well-being (e.g. consumption, education, health etc), $\theta$ is the dependence parameter, and $D$ is the number of dimensions/components.  Function ( \ref{eq:clayton_cdf} ) has the following density function:
+
+\begin{equation}
+f_i(\mathbf{u},\theta)=S_i^{-D-1/\theta} \prod_{d=1}^{D} \left[-(1-d)\theta+1 \right] u_{id}
+\label{eq:clayton_dens}
+\end{equation}
+
+\noindent which leads to the following specification of the log-likelihood function:
+
+\begin{equation}
+log \mathit{L} = -(D+1) \sum_{i} \log(S_i) + n \sum_{d} \log \left[ -(1-D)\theta+1 \right] + (\theta+1) \sum_{i} \sum_{d} \log(u_{id})
+\label{eq:clayton_logL}
+\end{equation}
+
+This log-likelihood function requires numerical optimization, and the asymptotic variance of the dependence parameter can be obtained from the following expression:
+
+\begin{equation}
+\begin{aligned}
+\frac{d^2\log\mathit{L}}{d\theta^2}= &-\frac{2}{\theta^3} \sum_{i} \log(S_i)+\frac{2}{\theta^2} \sum_{i} \frac{dS_i}{d\theta}:S_i - \\
+&-(D+1/\theta) \sum_{i} \left[ \frac{d^2S_i}{d\theta}S_i-\left( \frac{dS_i}{d\theta} \right)^2 \right]:S_i+n\sum_{d}\frac{-(1-d)^2}{[-(1-d)\theta+1]}
+\end{aligned}
+\label{eq:clayton_hess}
+\end{equation}
+
+Next section presents our estimation results.
+
+\section{Estimation results}
+
+<<Preliminary,results='hide'>>=
+
+# Estimating copula parameters
+library(copula)
+numcol_w1<-m
+family<-"clayton"
+if (family=="frank"){
+  opt.meth<-"itau"
+} else {
+  opt.meth<-"ml"
+}
+
+archm.cop<-archmCopula(family,dim=numcol_w1)
+
+copula.w1<-fitCopula(archm.cop, wave1, method=opt.meth)
+theta1<-copula.w1@estimate
+theta1.se<-sqrt(copula.w1@var.est)
+theta1.z<-theta1/theta1.se
+theta1.pval<-2*pnorm(-abs(theta1.z))
+
+copula.w2<-fitCopula(archm.cop, wave2, method=opt.meth)
+theta2<-copula.w2@estimate
+theta2.se<-sqrt(copula.w2@var.est)
+theta2.z<-theta2/theta2.se
+theta2.pval<-2*pnorm(-abs(theta2.z))
+
+# Multidimensional poverty lines wave 1
+temp1<-matrix(0,1,m)
+temp2<-matrix(0,1,m)
+k<-1
+for (j in 1:m){
+  if (DataTypes[j,1]==1) {
+    if (cut.contin[k]<1){
+      temp1[1,j]<-quantile(wave1[,j],cut.contin[k])
+      temp2[1,j]<-quantile(wave2[,j],cut.contin[k])
+      k<-k+1
+    } else {
+      temp1[1,j]<-length(subset(w1[,j],w1[,j]<cut.contin[k]))/(n+1)
+      temp2[1,j]<-length(subset(w2[,j],w2[,j]<cut.contin[k]))/(n+1)
+      k<-k+1
+    }
+  } else {
+    temp1[1,j]<-min(unique(wave1[,j]))
+    temp2[1,j]<-min(unique(wave2[,j]))
+  }
+}
+
+# CDF
+archm.cop<-archmCopula(family,dim=numcol_w1,param=theta1)
+cc1<-pCopula(wave1,archm.cop)
+c1<-sort(cc1,index.return = TRUE)
+c1.tr<-pCopula(temp1,archm.cop)
+
+archm.cop<-archmCopula(family,dim=numcol_w1,param=theta2)
+cc2<-pCopula(wave2,archm.cop)
+c2<-sort(cc2,index.return = TRUE)
+c2.tr<-pCopula(temp2,archm.cop)
+
+# Kolmogorov-Smirnoff test
+KS<-ks.test(c1$x,c2$x)
+
+@
+
+For the sake of demonstration, we have used \Sexpr{numcol_w1} components in the copula function. These components are consumption, asset ownership, education, and access to basic necessities, including access to water, electricity, medical services, and sanitary facilities. \\       
+
+Using the maximum likelihood method, we were able to obtain the following estimates of the dependence parameter (Table \ref{tbl:Thetas}): \\  
+
+<<TableEst,results='asis'>>=
+
+# Final values of theta and standard errors
+results<-matrix(0,2,4)
+results[1,1]<-theta1
+results[1,2]<-theta1.se
+results[1,3]<-theta1.z
+results[1,4]<-theta1.pval
+results[2,1]<-theta2
+results[2,2]<-theta2.se
+results[2,3]<-theta2.z
+results[2,4]<-theta2.pval
+rownames(results)<-c("Theta 1","Theta 2")
+colnames(results)<-c("Estimate","St.Error","Z-score","P-value")
+
+colnames(results)<-c("Estimate","St.Error","Z-score","P-value")
+rownames(results)<-c("Theta (wave 1)","Theta (wave 2)")
+
+results.xtbl<-xtable(results,digits=4,
+                caption="Estimates of theta",
+                label="tbl:Thetas")
+print(results.xtbl,caption.placement="top",
+      sanitize.text.function=function(x){x})
+@
+
+Table ( \ref{tbl:Thetas} ) shows that the estimates of theta are positive and statistically significant at all reasonable levels of confidence. In other words, there is a statistically significant dependence among the components of the multidimensional measure of well-being. In addition, the dependence parameter indicates noticeable \Sexpr{ifelse(theta1>theta2,"decrease","increase")} from wave one to wave two. \\
+
+We are interested to see how this measure of well-being evolved between the two waves. The following figure shows the comparison:
+
+\begin{figure}[!ht]
+\caption{Comparison of the two copulas}
+<<FigureCDF,fig.height=5,fig.width=10,,out.width='.95\\textwidth'>>=
+temp_w1<-matrix(c1.tr,n,1)
+temp_w2<-matrix(c2.tr,n,1)
+plot(c1$x,type="l",col="red",lwd=1)
+lines(c2$x,col="blue",lwd=2,lty=5)
+lines(temp_w1,col="green",lwd=2)
+lines(temp_w2,lwd=2,lty=5)
+legend("topleft",c("Well-being  wave1","Well-being  wave2","Poverty line wave1","Poverty line wave2"),
+       lty=c(1,5,1,5),lwd=c(2,2,2,2),col=c("red","blue","green","black"))
+
+# par(mfrow = c(1,2))
+# 
+# plot(c1,col="red",type="l",main="Copula CDF - Wave 1",xlab="Observations") #,ylim=c(0,0.35))
+# points(temp_w1,type="l",lty=5,col="green")
+# legend("topleft",c("Copula","Poverty line"),lty=c(1,5),
+#        lwd=c(1,1),col=c("red","green"))
+
+# plot(c2,col="blue",type="l",main="Copula CDF - Wave 2",xlab="Observations") #,ylim=c(0,0.35))
+# points(temp_w2,type="l",lty=5,col="black")
+# legend("topleft",c("Copula","Poverty line"),lty=c(1,5),
+#        lwd=c(1,1),col=c("blue","black"))
+
+@
+\label{fig:two_copulas}
+\end{figure}
+
+Several intuitive results can be observed from Figure \ref{fig:two_copulas}. First, there is a statistically significant difference between the two copulas or measures of well-being (Kolmogorov-Smirnoff statistic is \Sexpr{round(KS$statistic,4)} with p-value=\Sexpr{round(KS$p.value,4)}). Second, the positive dependence among the components might be causing a virtuous cycle for the wealthy, and a vicious cycle for the poor. \textit{Prima facie} evidence of this result is supported by the curvature and slopes of the copula functions. Third, rather long left tails of the two copula functions serve as evidence for persistence of poverty. \\
+
+Using these multidimensional measures of well-being, we can estimate the underlying dynamics of poverty. The transition matrix is shown in Table \ref{tbl:transmatrix} : \\
+
+<<results='asis'>>=
+cc<-cbind(cc1,cc2)
+mm<-matrix(0,2,2)
+for (i in 1:3000) {
+  if (cc[i,1]>c1.tr & cc[i,2]>c2.tr) {
+    mm[1,1]<-mm[1,1]+1
+  } else if (cc[i,1]>c1.tr & cc[i,2]<c2.tr) {
+    mm[1,2]<-mm[1,2]+1
+  } else if (cc[i,1]<c1.tr & cc[i,2]>c2.tr) {
+    mm[2,1]<-mm[2,1]+1
+  } else if (cc[i,1]<c1.tr & cc[i,2]<c2.tr) {
+    mm[2,2]<-mm[2,2]+1
+  }
+}
+mm<-round(100*mm/n,1)
+colnames(mm)<-c("Non-Poor (wave 2)","Poor (wave 2)")
+rownames(mm)<-c("Non-Poor (wave 1)","Poor (wave 1)")
+
+trans.matrix<-xtable(mm,digits=1,
+                caption="Transition Matrix (in percent)",
+                label="tbl:transmatrix")
+print(trans.matrix,caption.placement="top",
+      sanitize.text.function=function(x){x})
+@
+
+Table \ref{tbl:transmatrix} indicates that approximately \Sexpr{round(mm[1,1],0)} percent of households have been able to stay away from poverty in both ways. However, \Sexpr{round(mm[1,2],0)} percent of households slid below the poverty line, while almost \Sexpr{round(mm[2,1],0)} percent of households recovered from the poverty. Around \Sexpr{round(mm[2,2],0)} percent of households remained poor in both waves. \\
+
+Copula functions provide an intuitive way to test the significance of each component used in the multidimensional measure of well-being. We can drop a component from the copula, and when compare the resulted likelihood with the likelihood of the original copula. In other words, we are comparing a measure with one missing component to a measure which incorporates all components. Table \ref{tbl:LogLikeRatioTest} presents the likelihood ratio test statistics and other relevant indicators: \\
+
+<<results='asis'>>=
+
+# density of the original copula in wave 1 and 2
+cop1<-archmCopula(family,dim=numcol_w1,param=theta1)
+dCop1<-dCopula(wave1,cop1)
+dCop1<-dCop1/sum(dCop1)
+
+cop2<-archmCopula(family,dim=numcol_w1,param=theta2)
+dCop2<-dCopula(wave1,cop2)
+dCop2<-dCop2/sum(dCop2)
+
+KL<-matrix(0,numcol_w1,8)
+
+LL.cop<-archmCopula(family,dim=(numcol_w1-1))
+for (i in 1:numcol_w1) {
+  # Wave 1
+  wave.temp<-wave1[,-i]
+  LL.copula<-fitCopula(LL.cop, wave.temp, method=opt.meth)
+  param.temp<-LL.copula@estimate
+  KL[i,1]<-param.temp
+  KL[i,2]<-sqrt(LL.copula@var.est)
+  cop.temp<-archmCopula(family,dim=(numcol_w1-1),param=param.temp)
+  dCopi<-dCopula(wave.temp,cop.temp)
+  dCopi<-dCopi/sum(dCopi)
+  KL[i,3]<-sum(dCopi*log(dCopi/dCop1))
+  # Wave 2
+  wave.temp<-wave2[,-i]
+  LL.copula<-fitCopula(LL.cop, wave.temp, method=opt.meth)
+  param.temp<-LL.copula@estimate
+  KL[i,5]<-param.temp
+  KL[i,6]<-sqrt(LL.copula@var.est)
+  cop.temp<-archmCopula(family,dim=(numcol_w1-1),param=param.temp)
+  dCopi<-dCopula(wave.temp,cop.temp)
+  dCopi<-dCopi/sum(dCopi)
+  KL[i,7]<-sum(dCopi*log(dCopi/dCop2))  
+}
+KL[,4]<-KL[,3]/sum(KL[,3])
+KL[,8]<-KL[,7]/sum(KL[,7])
+
+colnames(KL)<-c("Theta1","St.Error","KL1","Weights1","Theta2","St.Error","KL2","Weights2")
+rownames(KL)<-DataNames
+
+LLRatio.table<-xtable(KL,digits=2,align="r|cccccccc",
+                caption="Statistical Significance of Individual Components",
+                label="tbl:LogLikeRatioTest")
+print(LLRatio.table,caption.placement="top",
+      sanitize.text.function=function(x){x})
+
+@
+
+As it was expected consumption and asset ownership are the substantial components in our multidimensional measure of well-being. \\
+
+<<Mixed,results='asis'>>=
+
+# cc1.new<-matrix(0,n,1)
+# cc2.new<-matrix(0,n,1)
+# tm.new<-matrix(0,2,2)
+# p.line1<-sum(KL[,3]*temp1)
+# p.line2<-sum(KL[,7]*temp2)
+# for (i in 1:n) {
+#   cc1.new[i,1]<-sum(wave1[i,]*KL[,3])
+#   cc2.new[i,1]<-sum(wave2[i,]*KL[,7])
+#   if (cc1.new[i,1]>p.line1 & cc2.new[i,1]>p.line2) {
+#     tm.new[1,1]<-tm.new[1,1]+1
+#   } else if (cc1.new[i,1]>p.line1 & cc2.new[i,1]<p.line2) {
+#     tm.new[1,2]<-tm.new[1,2]+1
+#   } else if (cc1.new[i,1]<p.line1 & cc2.new[i,1]>p.line2) {
+#     tm.new[2,1]<-tm.new[2,1]+1
+#   } else if (cc1.new[i,1]<p.line1 & cc2.new[i,1]<p.line2) {
+#     tm.new[2,2]<-tm.new[2,2]+1
+#   }
+# }
+
+tm.new<-matrix(0,2,2)
+for (i in 1:n) {
+  t1<-0
+  t2<-0
+  for (j in 1:m) {
+    # wave 1
+    if (wave1[i,j]<=temp1[1,j]) {
+      t1<-t1+1
+    }
+    # wave 2 
+    if (wave2[i,j]<=temp2[1,j]) {
+      t2<-t2+1
+    }
+  }
+  # Transition matrix
+  if (t1<5 & t2<5) {
+    tm.new[1,1]<-tm.new[1,1]+1
+  } else if (t1<5 & t2>4) {
+    tm.new[1,2]<-tm.new[1,2]+1
+  } else if (t1>4 & t2<5) {
+    tm.new[2,1]<-tm.new[2,1]+1
+  } else if (t1>4 & t2>4) {
+    tm.new[2,2]<-tm.new[2,2]+1
+  }
+}
+
+tm.new<-100*(tm.new/n)
+
+colnames(tm.new)<-c("Non-Poor (wave 2)","Poor (wave 2)")
+rownames(tm.new)<-c("Non-Poor (wave 1)","Poor (wave 1)")
+
+tm.xtbl<-xtable(tm.new,digits=1,
+                caption="Transition Matrix (in percent)",
+                label="tbl:transmatrixNew")
+print(tm.xtbl,caption.placement="top",
+      sanitize.text.function=function(x){x})
+
+
+@
+
+more to come ...
+
+
+\section{Conclusion}
+
+\end{document}
