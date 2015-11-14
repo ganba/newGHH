@@ -66,8 +66,9 @@ The remainder of this paper is organized as follows. Next section provides descr
 \section{Data}
 
 <<ImportData,results='asis'>>=
-mydata<-read.dta("C:/Data/Ethiopia/DataFilesLast/data_for_copula.dta")
+mydata<-read.dta("C:/Data/Ethiopia/DataFilesLast/data_for_copula_nov14.dta")
 attach(mydata)
+
 
 ww<-cbind(realcons_w1,pcl_w1,AveYrsEducAdults_w1,water_w1,
           electric_w1,toilet_w1,abs(AnyHHMemLackMA_w1-1),
