@@ -69,36 +69,39 @@ The remainder of this paper is organized as follows. Next section provides descr
 mydata<-read.dta("C:/Data/Ethiopia/DataFilesLast/data_for_copula_nov14.dta")
 attach(mydata)
 
+health_w1<-abs((NumHHMemLackMA_w1/hhsize_w1)-1)
+health_w2<-abs((NumHHMemLackMA_w2/hhsize_w2)-1)
 
-ww<-cbind(realcons_w1,pcl_w1,AveYrsEducAdults_w1,water_w1,
-          electric_w1,toilet_w1,abs(AnyHHMemLackMA_w1-1),
-          realcons_w2,pcl_w2,AveYrsEducAdults_w2,water_w2,
-          electric_w2,toilet_w2,abs(AnyHHMemLackMA_w2-1))
+# health_w1<-AnyHHMemLackMA_w1
+# health_w2<-AnyHHMemLackMA_w2
+
+ww<-cbind(realcons_w1,pcl_w1,AveYrsEducAdults_w1,waterF_w1,
+          electricF_w1,toiletF_w1,health_w1,
+          realcons_w2,pcl_w2,AveYrsEducAdults_w2,waterF_w2,
+          electricF_w2,toiletF_w2,health_w2)
 
 ww<-ww[complete.cases(ww),]
-
-# Data Names assigned
-DataNames<-c("Real Consumption","Livestock","Ave.Yrs.Educ.Adults","Access to safe water",
-             "Access to electricity","Access to sanitary facilities","Access to medical services")
-
-# Cut of for continuous
-cut.contin<-c(0.302,0.302,5)
 
 # Dimensions
 n<-dim(ww)[1]
 m<-dim(ww)[2]/2
 
+# Data Names assigned
+DataNames<-c("Real Consumption","Livestock","Ave.Yrs.Educ.Adults","Access to safe water",
+             "Access to electricity","Access to sanitary facilities","Access to medical services")
+
+# poverty cut off points for all variables
+cut.all<-c(0.302,0.302,5,4,5,5,0.7)
+
+# Data types: 
+#   continuous 1 (cut by quantile) e.g. consumption
+#   continuous 1 (cut by number) e.g. number of years of education
+#   descrete   3 (cut by number from bottom) e.g. access to water
+DataTypes<-c(1,1,2,3,3,3,1)
+
 # Divide the data into two waves
 w1<-ww[,1:m]
 w2<-ww[,(m+1):(2*m)]
-
-# Data type if continuous (0 No, 1 Yes) Benchmark - 10 
-DataTypes<-matrix(0,m,1)
-for (j in 1:m) {
-  if (length(unique(w1[,j]))>8) {
-    DataTypes[j,1]<-1
-  }
-}
 
 # Empirical distributions
 wave1<-matrix(0,n,m)
@@ -116,15 +119,15 @@ The data used in our analysis covers rural households from Ethiopia. The data wa
 
 dstat<-matrix(0,m,5)
 for (j in 1:m) {
-  dstat[j,1]<-DataTypes[j,1]
-  if (DataTypes[j,1]==1) {
+  dstat[j,1]<-DataTypes[j]
+  if (DataTypes[j]==1 | DataTypes[j]==2) {
     dstat[j,2]<-summary(w1[,j])[4]
     dstat[j,3]<-summary(w2[,j])[4]
     dstat[j,4]<-dstat[j,3]-dstat[j,2]
     dstat[j,5]<-100*(dstat[j,3]/dstat[j,2]-1)
   } else {
-    dstat[j,2]<-100*(count(w1[,j])$freq[1]/n)
-    dstat[j,3]<-100*(count(w2[,j])$freq[1]/n)
+    dstat[j,2]<-100*(count(w1[,j])$freq[cut.all[j]]/n)
+    dstat[j,3]<-100*(count(w2[,j])$freq[cut.all[j]]/n)
     dstat[j,4]<-dstat[j,3]-dstat[j,2]
     dstat[j,5]<-100*(dstat[j,3]/dstat[j,2]-1)    
   }
@@ -222,23 +225,35 @@ theta2.pval<-2*pnorm(-abs(theta2.z))
 # Multidimensional poverty lines wave 1
 temp1<-matrix(0,1,m)
 temp2<-matrix(0,1,m)
-k<-1
-for (j in 1:m){
-  if (DataTypes[j,1]==1) {
-    if (cut.contin[k]<1){
-      temp1[1,j]<-quantile(wave1[,j],cut.contin[k])
-      temp2[1,j]<-quantile(wave2[,j],cut.contin[k])
-      k<-k+1
-    } else {
-      temp1[1,j]<-length(subset(w1[,j],w1[,j]<cut.contin[k]))/(n+1)
-      temp2[1,j]<-length(subset(w2[,j],w2[,j]<cut.contin[k]))/(n+1)
-      k<-k+1
-    }
-  } else {
-    temp1[1,j]<-min(unique(wave1[,j]))
-    temp2[1,j]<-min(unique(wave2[,j]))
+for (j in 1:m) {
+  if (DataTypes[j]==1) {
+    temp1[1,j]<-quantile(wave1[,j],cut.all[j])
+    temp2[1,j]<-quantile(wave2[,j],cut.all[j])
+  } else if (DataTypes[j]==2) {
+    temp1[1,j]<-length(subset(w1[,j],w1[,j]<cut.all[j]))/(n+1)
+    temp2[1,j]<-length(subset(w2[,j],w2[,j]<cut.all[j]))/(n+1)
+  } else if (DataTypes[j]==3) {
+    temp1[1,j]<-sort(unique(wave1[,j]))[cut.all[j]]
+    temp2[1,j]<-sort(unique(wave2[,j]))[cut.all[j]]
   }
 }
+# k<-1
+# for (j in 1:m){
+#   if (DataTypes[j,1]==1) {
+#     if (cut.contin[k]<1){
+#       temp1[1,j]<-quantile(wave1[,j],cut.contin[k])
+#       temp2[1,j]<-quantile(wave2[,j],cut.contin[k])
+#       k<-k+1
+#     } else {
+#       temp1[1,j]<-length(subset(w1[,j],w1[,j]<cut.contin[k]))/(n+1)
+#       temp2[1,j]<-length(subset(w2[,j],w2[,j]<cut.contin[k]))/(n+1)
+#       k<-k+1
+#     }
+#   } else {
+#     temp1[1,j]<-min(unique(wave1[,j]))
+#     temp2[1,j]<-min(unique(wave2[,j]))
+#   }
+# }
 
 # CDF
 archm.cop<-archmCopula(family,dim=numcol_w1,param=theta1)
@@ -348,82 +363,14 @@ print(trans.matrix,caption.placement="top",
 
 Table \ref{tbl:transmatrix} indicates that approximately \Sexpr{round(mm[1,1],0)} percent of households have been able to stay away from poverty in both ways. However, \Sexpr{round(mm[1,2],0)} percent of households slid below the poverty line, while almost \Sexpr{round(mm[2,1],0)} percent of households recovered from the poverty. Around \Sexpr{round(mm[2,2],0)} percent of households remained poor in both waves. \\
 
-Copula functions provide an intuitive way to test the significance of each component used in the multidimensional measure of well-being. We can drop a component from the copula, and when compare the resulted likelihood with the likelihood of the original copula. In other words, we are comparing a measure with one missing component to a measure which incorporates all components. Table \ref{tbl:LogLikeRatioTest} presents the likelihood ratio test statistics and other relevant indicators: \\
+At this point one might wonder how the transition matrix might look like if we ignore the dependence among the components. Table \ref{tbl:transmatrixnodep} presents this transition matrix: 
 
-<<results='asis'>>=
+<<TransMatNoDependence,results='asis'>>=
 
-# density of the original copula in wave 1 and 2
-cop1<-archmCopula(family,dim=numcol_w1,param=theta1)
-dCop1<-dCopula(wave1,cop1)
-dCop1<-dCop1/sum(dCop1)
-
-cop2<-archmCopula(family,dim=numcol_w1,param=theta2)
-dCop2<-dCopula(wave1,cop2)
-dCop2<-dCop2/sum(dCop2)
-
-KL<-matrix(0,numcol_w1,8)
-
-LL.cop<-archmCopula(family,dim=(numcol_w1-1))
-for (i in 1:numcol_w1) {
-  # Wave 1
-  wave.temp<-wave1[,-i]
-  LL.copula<-fitCopula(LL.cop, wave.temp, method=opt.meth)
-  param.temp<-LL.copula@estimate
-  KL[i,1]<-param.temp
-  KL[i,2]<-sqrt(LL.copula@var.est)
-  cop.temp<-archmCopula(family,dim=(numcol_w1-1),param=param.temp)
-  dCopi<-dCopula(wave.temp,cop.temp)
-  dCopi<-dCopi/sum(dCopi)
-  KL[i,3]<-sum(dCopi*log(dCopi/dCop1))
-  # Wave 2
-  wave.temp<-wave2[,-i]
-  LL.copula<-fitCopula(LL.cop, wave.temp, method=opt.meth)
-  param.temp<-LL.copula@estimate
-  KL[i,5]<-param.temp
-  KL[i,6]<-sqrt(LL.copula@var.est)
-  cop.temp<-archmCopula(family,dim=(numcol_w1-1),param=param.temp)
-  dCopi<-dCopula(wave.temp,cop.temp)
-  dCopi<-dCopi/sum(dCopi)
-  KL[i,7]<-sum(dCopi*log(dCopi/dCop2))  
-}
-KL[,4]<-KL[,3]/sum(KL[,3])
-KL[,8]<-KL[,7]/sum(KL[,7])
-
-colnames(KL)<-c("Theta1","St.Error","KL1","Weights1","Theta2","St.Error","KL2","Weights2")
-rownames(KL)<-DataNames
-
-LLRatio.table<-xtable(KL,digits=2,align="r|cccccccc",
-                caption="Statistical Significance of Individual Components",
-                label="tbl:LogLikeRatioTest")
-print(LLRatio.table,caption.placement="top",
-      sanitize.text.function=function(x){x})
-
-@
-
-As it was expected consumption and asset ownership are the substantial components in our multidimensional measure of well-being. \\
-
-<<Mixed,results='asis'>>=
-
-# cc1.new<-matrix(0,n,1)
-# cc2.new<-matrix(0,n,1)
-# tm.new<-matrix(0,2,2)
-# p.line1<-sum(KL[,3]*temp1)
-# p.line2<-sum(KL[,7]*temp2)
-# for (i in 1:n) {
-#   cc1.new[i,1]<-sum(wave1[i,]*KL[,3])
-#   cc2.new[i,1]<-sum(wave2[i,]*KL[,7])
-#   if (cc1.new[i,1]>p.line1 & cc2.new[i,1]>p.line2) {
-#     tm.new[1,1]<-tm.new[1,1]+1
-#   } else if (cc1.new[i,1]>p.line1 & cc2.new[i,1]<p.line2) {
-#     tm.new[1,2]<-tm.new[1,2]+1
-#   } else if (cc1.new[i,1]<p.line1 & cc2.new[i,1]>p.line2) {
-#     tm.new[2,1]<-tm.new[2,1]+1
-#   } else if (cc1.new[i,1]<p.line1 & cc2.new[i,1]<p.line2) {
-#     tm.new[2,2]<-tm.new[2,2]+1
-#   }
-# }
-
-tm.new<-matrix(0,2,2)
+# tm.new - transition matrix
+# t1 - number of deprivations per HH in wave 1
+# t2 - number of deprivations per HH in wave 2
+tm.nodep<-matrix(0,2,2)
 for (i in 1:n) {
   t1<-0
   t2<-0
@@ -438,28 +385,115 @@ for (i in 1:n) {
     }
   }
   # Transition matrix
-  if (t1<5 & t2<5) {
-    tm.new[1,1]<-tm.new[1,1]+1
-  } else if (t1<5 & t2>4) {
-    tm.new[1,2]<-tm.new[1,2]+1
-  } else if (t1>4 & t2<5) {
-    tm.new[2,1]<-tm.new[2,1]+1
-  } else if (t1>4 & t2>4) {
-    tm.new[2,2]<-tm.new[2,2]+1
+  if (t1<7 & t2<7) {
+    tm.nodep[1,1]<-tm.nodep[1,1]+1
+  } else if (t1<7 & t2==7) {
+    tm.nodep[1,2]<-tm.nodep[1,2]+1
+  } else if (t1==7 & t2<7) {
+    tm.nodep[2,1]<-tm.nodep[2,1]+1
+  } else if (t1==7 & t2==7) {
+    tm.nodep[2,2]<-tm.nodep[2,2]+1
   }
 }
 
-tm.new<-100*(tm.new/n)
+tm.nodep<-100*(tm.nodep/n)
 
-colnames(tm.new)<-c("Non-Poor (wave 2)","Poor (wave 2)")
-rownames(tm.new)<-c("Non-Poor (wave 1)","Poor (wave 1)")
+colnames(tm.nodep)<-c("Non-Poor (wave 2)","Poor (wave 2)")
+rownames(tm.nodep)<-c("Non-Poor (wave 1)","Poor (wave 1)")
 
-tm.xtbl<-xtable(tm.new,digits=1,
+tm1.xtbl<-xtable(tm.nodep,digits=1,
                 caption="Transition Matrix (in percent)",
-                label="tbl:transmatrixNew")
-print(tm.xtbl,caption.placement="top",
+                label="tbl:transmatrixnodep")
+print(tm1.xtbl,caption.placement="top",
       sanitize.text.function=function(x){x})
 
+@
+
+Comparison of Tables \ref{tbl:transmatrix} and \ref{tbl:transmatrixnodep} indicates that the ignorance of the dependency structure might lead to a very rosy picture which is quite far from the reality. Therefore, this result shows that in many empirical analysis it is worth to check for the dependence among the components of the well-being measure. \\
+
+At this point, another issue might be causing concerns to the sceptics. It is not at al clear what was individual contributions of the components of the copula-based well-being measure. In other words, one might be worried whether the whole set of results were be driven by a few components. Sceptics might even argue that the results are driven by one important component which is often the consumption. This is not an easy issue, and we should have a statistically sensible way to estimate the individual contribution of the components. \\ 
+
+Luckily for us, our copula-based framework provides an intuitive way to test the significance of each component used in the multidimensional measure of well-being. The test can be done in a few steps. First, we need to drop one component (e.g. consumption) from the copula function, and then estimate the copula density. We call it "one-out-density". Second, we can measure a distance between the one-out-density and the original density of the copula function. We will call the latter as the "all-in-density", because it incorporates all the original components. There are several ways to measure this distance, but in this paper we will rely on the Kullback-Leibler (KL) information criteria. Table \ref{tbl:LogLikeRatioTest} presents the KL divergence and share of information losses attributable to each and every component: \\
+
+<<results='asis'>>=
+
+# density of the original copula in wave 1 and 2
+cop1<-archmCopula(family,dim=numcol_w1,param=theta1)
+dCop1<-dCopula(wave1,cop1)
+dCop1<-dCop1/sum(dCop1)
+
+cop2<-archmCopula(family,dim=numcol_w1,param=theta2)
+dCop2<-dCopula(wave1,cop2)
+dCop2<-dCop2/sum(dCop2)
+
+KL<-matrix(0,numcol_w1,4)
+
+LL.cop<-archmCopula(family,dim=(numcol_w1-1))
+for (i in 1:numcol_w1) {
+  # Wave 1
+  wave.temp<-wave1[,-i]
+  LL.copula<-fitCopula(LL.cop, wave.temp, method=opt.meth)
+  param.temp<-LL.copula@estimate
+  cop.temp<-archmCopula(family,dim=(numcol_w1-1),param=param.temp)
+  dCopi<-dCopula(wave.temp,cop.temp)
+  dCopi<-dCopi/sum(dCopi)
+  KL[i,1]<-sum(dCopi*log(dCopi/dCop1))
+  # Wave 2
+  wave.temp<-wave2[,-i]
+  LL.copula<-fitCopula(LL.cop, wave.temp, method=opt.meth)
+  param.temp<-LL.copula@estimate
+  cop.temp<-archmCopula(family,dim=(numcol_w1-1),param=param.temp)
+  dCopi<-dCopula(wave.temp,cop.temp)
+  dCopi<-dCopi/sum(dCopi)
+  KL[i,3]<-sum(dCopi*log(dCopi/dCop2))  
+}
+KL[,2]<-KL[,1]/sum(KL[,1])
+KL[,4]<-KL[,3]/sum(KL[,3])
+
+colnames(KL)<-c("KL1","Weights1","KL2","Weights2")
+rownames(KL)<-DataNames
+
+LLRatio.table<-xtable(KL,digits=2,align="l|cccc",
+                caption="Statistical Significance of Individual Components",
+                label="tbl:LogLikeRatioTest")
+print(LLRatio.table,caption.placement="top",
+      sanitize.text.function=function(x){x})
+
+@
+
+As it was expected consumption and asset ownership are the substantial components in our multidimensional measure of well-being, but their respective contributions decreased substantially in wave 2. \\
+
+<<Mixed,results='asis'>>=
+
+# tm.new - transition matrix
+# t1 - number of deprivations per HH in wave 1
+# t2 - number of deprivations per HH in wave 2
+
+# tm.new<-matrix(0,2,2)
+# for (i in 1:n) {
+#   # Transition matrix
+#   if (t1<5 & t2<5) {
+#     tm.new[1,1]<-tm.new[1,1]+1
+#   } else if (t1<5 & t2>4) {
+#     tm.new[1,2]<-tm.new[1,2]+1
+#   } else if (t1>4 & t2<5) {
+#     tm.new[2,1]<-tm.new[2,1]+1
+#   } else if (t1>4 & t2>4) {
+#     tm.new[2,2]<-tm.new[2,2]+1
+#   }
+# }
+# 
+# tm.new<-100*(tm.new/n)
+# 
+# colnames(tm.new)<-c("Non-Poor (wave 2)","Poor (wave 2)")
+# rownames(tm.new)<-c("Non-Poor (wave 1)","Poor (wave 1)")
+# 
+# tm.xtbl<-xtable(tm.new,digits=1,
+#                 caption="Transition Matrix (in percent)",
+#                 label="tbl:transmatrixNew")
+# print(tm.xtbl,caption.placement="top",
+#       sanitize.text.function=function(x){x})
+# 
 
 @
 
